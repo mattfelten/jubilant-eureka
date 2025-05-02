@@ -1,15 +1,21 @@
-import { create } from "@bufbuild/protobuf";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { NoLogsIcon } from "~/components/blocks/no-logs-icon";
-import { TableRowSkeleton } from "~/components/blocks/table-row-skeleton";
-import { ToggleStreamButton } from "~/components/blocks/toggle-stream-button";
+import { create } from '@bufbuild/protobuf';
+import React, {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from 'react';
+import { NoLogsIcon } from '~/components/blocks/no-logs-icon';
+import { TableRowSkeleton } from '~/components/blocks/table-row-skeleton';
+import { ToggleStreamButton } from '~/components/blocks/toggle-stream-button';
+import { Badge } from '~/components/ui/badge';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "~/components/ui/select";
+} from '~/components/ui/select';
 import {
 	Table,
 	TableBody,
@@ -17,23 +23,28 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
-} from "~/components/ui/table";
-import { logServiceClient, logServiceOptions } from "~/core/react-query/log";
-import { formatTimestamp } from "~/lib/timestamp";
+} from '~/components/ui/table';
+import {
+	logServiceClient,
+	logServiceOptions,
+} from '~/core/react-query/log';
+import { formatTimestamp } from '~/lib/timestamp';
 import {
 	ListLogsRequestSchema,
 	type ListLogsResponse_Log,
 	MicroService,
-} from "~/protogen/redpanda/takehome/api/v1/list_logs_pb";
+} from '~/protogen/redpanda/takehome/api/v1/list_logs_pb';
+import { MessageCell } from '~/components/blocks/message-cell';
 
 export const Landing = () => {
 	const [logs, setLogs] = useState<ListLogsResponse_Log[]>([]);
 	const [isStreaming, setIsStreaming] = useState<boolean>(false);
 	const [isLoading, setIsLoading] = useState<boolean>(false);
-	const [selectedService, setSelectedService] = useState<MicroService>(
-		MicroService.GATEWAY,
+	const [selectedService, setSelectedService] =
+		useState<MicroService>(MicroService.GATEWAY);
+	const streamAbortControllerRef = useRef<AbortController | null>(
+		null
 	);
-	const streamAbortControllerRef = useRef<AbortController | null>(null);
 	const startStreaming = useCallback(() => {
 		if (streamAbortControllerRef.current !== null) return;
 
@@ -54,45 +65,59 @@ export const Landing = () => {
 
 		const startStream = async () => {
 			try {
-				for await (const log of logServiceClient.listLogs(listLogsRequest, {
-					signal: abortController.signal,
-				})) {
+				for await (const log of logServiceClient.listLogs(
+					listLogsRequest,
+					{
+						signal: abortController.signal,
+					}
+				)) {
 					if (abortController.signal.aborted) {
 						break;
 					}
 
 					try {
 						switch (log.controlMessage.case) {
-							case "data": {
+							case 'data': {
 								setLogs((currentLogs) => [
 									...currentLogs,
-									log.controlMessage.value as ListLogsResponse_Log,
+									log.controlMessage
+										.value as ListLogsResponse_Log,
 								]);
 								if (isLoading) {
 									setIsLoading(false);
 								}
 								break;
 							}
-							case "phase": {
-								if (log.controlMessage.value.isCancelled) {
-									console.log("Stream cancelled by server");
+							case 'phase': {
+								if (
+									log.controlMessage.value
+										.isCancelled
+								) {
+									console.log(
+										'Stream cancelled by server'
+									);
 									stopStreaming();
 								}
 								break;
 							}
-							case "error": {
-								console.error(`Stream error: ${log.controlMessage.value}`);
+							case 'error': {
+								console.error(
+									`Stream error: ${log.controlMessage.value}`
+								);
 								stopStreaming();
 								break;
 							}
 						}
 					} catch (error) {
-						console.error("Error processing stream message", error);
+						console.error(
+							'Error processing stream message',
+							error
+						);
 					}
 				}
 			} catch (error) {
 				if (!abortController.signal.aborted) {
-					console.error("Stream connection error", error);
+					console.error('Stream connection error', error);
 					stopStreaming();
 				}
 			} finally {
@@ -147,7 +172,7 @@ export const Landing = () => {
 				stopStreaming();
 			}
 		},
-		[isStreaming, stopStreaming],
+		[isStreaming, stopStreaming]
 	);
 
 	useEffect(() => {
@@ -160,12 +185,18 @@ export const Landing = () => {
 		<div className="container mx-auto py-10 px-4">
 			<div className="flex flex-col space-y-6">
 				<div className="flex justify-between items-center">
-					<h1 className="text-2xl font-bold text-gray-900">Log Viewer</h1>
+					<h1 className="text-2xl font-bold text-gray-900">
+						Log Viewer
+					</h1>
 					<div className="flex items-center gap-4">
 						<Select
 							onValueChange={handleServiceChange}
 							defaultValue={logServiceOptions
-								.find((option) => option.value === selectedService)
+								.find(
+									(option) =>
+										option.value ===
+										selectedService
+								)
 								?.value.toString()}
 						>
 							<SelectTrigger className="w-[180px]">
@@ -184,17 +215,25 @@ export const Landing = () => {
 						</Select>
 						<div className="flex items-center">
 							<div
-								className={`h-2 w-2 rounded-full mr-2 ${isStreaming ? "bg-green-500 animate-pulse" : "bg-gray-300"}`}
+								className={`h-2 w-2 rounded-full mr-2 ${
+									isStreaming
+										? 'bg-green-500 animate-pulse'
+										: 'bg-gray-300'
+								}`}
 							/>
 							<span className="text-sm text-gray-600">
-								{isStreaming ? "Streaming active" : "Streaming paused"}
+								{isStreaming
+									? 'Streaming active'
+									: 'Streaming paused'}
 							</span>
 						</div>
 						<ToggleStreamButton
 							isStreaming={isStreaming}
 							onClick={toggleStreaming}
 						>
-							{isStreaming ? "Stop streaming" : "Start streaming"}
+							{isStreaming
+								? 'Stop streaming'
+								: 'Start streaming'}
 						</ToggleStreamButton>
 					</div>
 				</div>
@@ -206,9 +245,13 @@ export const Landing = () => {
 					<Table>
 						<TableHeader>
 							<TableRow>
-								<TableHead className="w-[180px]">Timestamp</TableHead>
+								<TableHead className="w-[180px]">
+									Timestamp
+								</TableHead>
 								<TableHead>Log</TableHead>
-								<TableHead className="w-[100px]">Status</TableHead>
+								<TableHead className="w-[100px]">
+									Status
+								</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -225,8 +268,8 @@ export const Landing = () => {
 											<p>No logs available</p>
 											<p className="text-sm">
 												{isStreaming
-													? "Waiting for logs..."
-													: "Start streaming to fetch logs."}
+													? 'Waiting for logs...'
+													: 'Start streaming to fetch logs.'}
 											</p>
 										</div>
 									</TableCell>
@@ -234,21 +277,27 @@ export const Landing = () => {
 							) : (
 								logs.map((log) => (
 									<TableRow
-										key={`${log.partitionId}-${log.offset.toString()}-${log.timestamp}`}
+										key={`${
+											log.partitionId
+										}-${log.offset.toString()}-${
+											log.timestamp
+										}`}
 									>
-										<TableCell>{formatTimestamp(log.timestamp)}</TableCell>
-										<TableCell className="font-mono break-all">
-											{log.log}
+										<TableCell>
+											{formatTimestamp(
+												log.timestamp
+											)}
 										</TableCell>
+										<MessageCell log={log.log} />
 										<TableCell>
 											{log.tooLarge ? (
-												<span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+												<Badge variant="warning">
 													Too Large
-												</span>
+												</Badge>
 											) : (
-												<span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+												<Badge variant="positive">
 													Complete
-												</span>
+												</Badge>
 											)}
 										</TableCell>
 									</TableRow>
@@ -260,7 +309,10 @@ export const Landing = () => {
 
 				<div className="flex items-center justify-between text-sm text-gray-500">
 					<span>Logs are streamed in real-time</span>
-					<span>{logs.length > 0 && `Showing ${logs.length} log entries`}</span>
+					<span>
+						{logs.length > 0 &&
+							`Showing ${logs.length} log entries`}
+					</span>
 				</div>
 			</div>
 		</div>
