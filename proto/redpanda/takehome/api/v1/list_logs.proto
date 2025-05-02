@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package redpanda.takehome.api.v1;
+
+enum MicroService {
+  MICRO_SERVICE_UNSPECIFIED = 0;
+  // Gateway produces a lot of log messages.
+  MICRO_SERVICE_GATEWAY = 1;
+  // The AI agent is rarely invoked and therefore produces very few log records.
+  MICRO_SERVICE_AI_AGENT = 2;
+  // Borked is a poorly witten service and is always boken and therefore mostly
+  // spams error messages :(.
+  MICRO_SERVICE_BORKED = 3;
+}
+
+// ListLogsRequest is the request for ListLogs call.
+message ListLogsRequest {
+  int32 partition_id = 1;
+  int64 offset = 2;
+  int64 start_timestamp = 3;
+  int32 max_results = 4;
+  // LogMessages beyond this size limit will omit the log response
+  // and set the bool
+  int32 max_message_size = 5;
+  // The service whose log messages you want to retrieve.
+  MicroService service = 6;
+  // If true, the server will hold the call open and continuously
+  // emit new log messages as they’re produced.
+  bool follow = 7;
+}
+
+// ListLogsResponse is the response for ListLogsRequest call.
+message ListLogsResponse {
+  message Log {
+    int32 partition_id = 1;
+    int64 offset = 2;
+    int64 timestamp = 3;
+    string log = 4;
+    bool too_large = 5;
+  }
+
+  message CompletionSummary {
+    int64 elapsed_ms = 1; // Total elapsed time in milliseconds.
+    bool is_cancelled = 2; // Whether the call was cancelled.
+    int64 bytes_consumed = 3; // Total consumed bytes.
+  }
+
+  oneof control_message {
+    Log data = 1;
+    CompletionSummary phase = 2;
+    string error = 3;
+  }
+}
+
+service LogService {
+  rpc ListLogs(ListLogsRequest) returns (stream ListLogsResponse) {}
+}
