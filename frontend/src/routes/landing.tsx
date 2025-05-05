@@ -1,14 +1,8 @@
 import { create } from '@bufbuild/protobuf';
-import React, {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NoLogsIcon } from '~/components/blocks/no-logs-icon';
 import { TableRowSkeleton } from '~/components/blocks/table-row-skeleton';
 import { ToggleStreamButton } from '~/components/blocks/toggle-stream-button';
-import { Badge } from '~/components/ui/badge';
 import {
 	Select,
 	SelectContent,
@@ -28,20 +22,37 @@ import {
 	logServiceClient,
 	logServiceOptions,
 } from '~/core/react-query/log';
-import { formatTimestamp } from '~/lib/timestamp';
 import {
 	ListLogsRequestSchema,
 	type ListLogsResponse_Log,
 	MicroService,
 } from '~/protogen/redpanda/takehome/api/v1/list_logs_pb';
+import { LevelFilter } from '~/components/blocks/level-filter';
+import type { levelValues } from '~/components/blocks/level-filter';
+import { LogProvider } from '~/contexts/log-context';
+import { expandLog } from './expand-log';
+import type { ExpandedLogType } from './expand-log';
+import { filterLogs } from './filter-logs';
 import { MessageCell } from '~/components/blocks/message-cell';
+import { formatTimestamp } from '~/lib/timestamp';
+import { Badge } from '~/components/ui/badge';
+import { LogOptions } from '~/components/blocks/log-options';
 
 export const Landing = () => {
-	const [logs, setLogs] = useState<ListLogsResponse_Log[]>([]);
+	const [logs, setLogs] = useState<ExpandedLogType[]>([]);
 	const [isStreaming, setIsStreaming] = useState<boolean>(false);
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const [selectedService, setSelectedService] =
 		useState<MicroService>(MicroService.GATEWAY);
+
+	// Add new state for level filter
+	const [selectedLevel, setSelectedLevel] =
+		useState<levelValues>('all');
+
+	// Add filter handler
+	const handleLevelChange = (value: string) => {
+		setSelectedLevel(value as levelValues);
+	};
 	const streamAbortControllerRef = useRef<AbortController | null>(
 		null
 	);
@@ -80,8 +91,10 @@ export const Landing = () => {
 							case 'data': {
 								setLogs((currentLogs) => [
 									...currentLogs,
-									log.controlMessage
-										.value as ListLogsResponse_Log,
+									expandLog(
+										log.controlMessage
+											.value as ListLogsResponse_Log
+									),
 								]);
 								if (isLoading) {
 									setIsLoading(false);
@@ -181,6 +194,10 @@ export const Landing = () => {
 		};
 	}, [stopStreaming]);
 
+	const filteredLogs = filterLogs(logs, { selectedLevel });
+
+	const logCount = filteredLogs.length;
+
 	return (
 		<div className="container mx-auto py-10 px-4">
 			<div className="flex flex-col space-y-6">
@@ -189,6 +206,10 @@ export const Landing = () => {
 						Log Viewer
 					</h1>
 					<div className="flex items-center gap-4">
+						<LevelFilter
+							handleLevelChange={handleLevelChange}
+							selectedLevel={selectedLevel}
+						/>
 						<Select
 							onValueChange={handleServiceChange}
 							defaultValue={logServiceOptions
@@ -252,6 +273,7 @@ export const Landing = () => {
 								<TableHead className="w-[100px]">
 									Status
 								</TableHead>
+								<TableHead className="w-[48px]"></TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -275,32 +297,36 @@ export const Landing = () => {
 									</TableCell>
 								</TableRow>
 							) : (
-								logs.map((log) => (
-									<TableRow
+								filteredLogs.map((log) => (
+									<LogProvider
 										key={`${
 											log.partitionId
 										}-${log.offset.toString()}-${
 											log.timestamp
 										}`}
+										log={log}
 									>
-										<TableCell>
-											{formatTimestamp(
-												log.timestamp
-											)}
-										</TableCell>
-										<MessageCell log={log.log} />
-										<TableCell>
-											{log.tooLarge ? (
-												<Badge variant="warning">
-													Too Large
-												</Badge>
-											) : (
-												<Badge variant="positive">
-													Complete
-												</Badge>
-											)}
-										</TableCell>
-									</TableRow>
+										<TableRow>
+											<TableCell>
+												{formatTimestamp(
+													log.timestamp
+												)}
+											</TableCell>
+											<MessageCell />
+											<TableCell>
+												{log.tooLarge ? (
+													<Badge variant="warning">
+														Too Large
+													</Badge>
+												) : (
+													<Badge variant="positive">
+														Complete
+													</Badge>
+												)}
+											</TableCell>
+											<LogOptions />
+										</TableRow>
+									</LogProvider>
 								))
 							)}
 						</TableBody>
@@ -310,8 +336,8 @@ export const Landing = () => {
 				<div className="flex items-center justify-between text-sm text-gray-500">
 					<span>Logs are streamed in real-time</span>
 					<span>
-						{logs.length > 0 &&
-							`Showing ${logs.length} log entries`}
+						{logCount > 0 &&
+							`Showing ${logCount} log entries`}
 					</span>
 				</div>
 			</div>
